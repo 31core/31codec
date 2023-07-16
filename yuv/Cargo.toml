@@ -1,0 +1,8 @@
+[package]
+name = "yuv"
+version = "0.1.0"
+edition = "2021"
+authers = ["31core"]
+licnese = "MIT"
+
+[dependencies]
