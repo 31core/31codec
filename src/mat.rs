@@ -27,6 +27,9 @@ impl<E: Copy + Default> Matrix<E> {
     pub fn len(&self) -> usize {
         self.size
     }
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
     /** convert elements in matrix */
     pub fn convert<F, T>(&self, conv: F) -> Matrix<T>
     where
