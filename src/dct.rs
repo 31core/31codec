@@ -1,5 +1,6 @@
 use crate::mat::Matrix;
 use std::f64::consts::PI;
+use yuv::YUVFrame;
 
 pub const SIZE: usize = 8;
 
@@ -55,7 +56,7 @@ fn idct_point(u: f64, v: f64, tail: &Matrix<f64>) -> f64 {
     sum
 }
 
-pub fn dct(tail: &mut Matrix<f64>) {
+fn dct(tail: &mut Matrix<f64>) {
     let src = tail.clone();
     for u in 0..SIZE {
         for v in 0..SIZE {
@@ -64,7 +65,7 @@ pub fn dct(tail: &mut Matrix<f64>) {
     }
 }
 
-pub fn idct(tail: &mut Matrix<f64>) {
+fn idct(tail: &mut Matrix<f64>) {
     let src = tail.clone();
     for u in 0..tail.len() {
         for v in 0..SIZE {
@@ -73,7 +74,7 @@ pub fn idct(tail: &mut Matrix<f64>) {
     }
 }
 
-pub fn quantize(tail: &mut Matrix<f64>) {
+fn quantize(tail: &mut Matrix<f64>) {
     let q_mat = q_mat();
     for i in 0..tail.len() {
         for j in 0..tail.len() {
@@ -83,7 +84,7 @@ pub fn quantize(tail: &mut Matrix<f64>) {
     }
 }
 
-pub fn iquantize(tail: &mut Matrix<f64>) {
+fn iquantize(tail: &mut Matrix<f64>) {
     let q_mat = q_mat();
     for i in 0..SIZE {
         for j in 0..SIZE {
@@ -115,16 +116,64 @@ fn i8_to_u8(tail: &Matrix<i8>) -> Matrix<u8> {
     tail.convert(|e| (e as isize + 128) as u8)
 }
 
-pub fn encode(tail: &Matrix<u8>) -> Matrix<u8> {
+fn encode_tail(tail: &Matrix<u8>) -> Matrix<u8> {
     let mut tail = i8_to_f64(&u8_to_i8(tail));
     dct(&mut tail);
     quantize(&mut tail);
     i8_to_u8(&f64_to_i8(&tail))
 }
 
-pub fn decode(tail: &Matrix<u8>) -> Matrix<u8> {
+fn decode_tail(tail: &Matrix<u8>) -> Matrix<u8> {
     let mut tail = i8_to_f64(&u8_to_i8(tail));
     iquantize(&mut tail);
     idct(&mut tail);
     i8_to_u8(&f64_to_i8(&tail))
+}
+
+pub fn encode_frame<T>(src: &T) -> T
+where
+    T: YUVFrame + Clone,
+{
+    let mut dst = src.clone();
+    for i in 0..1920 / SIZE {
+        for j in 0..1080 / SIZE {
+            let mut mat = Matrix::new(SIZE);
+            for x in 0..8 {
+                for y in 0..8 {
+                    mat.set(x, y, dst.get_pixel_y(SIZE * i + x, SIZE * j + y));
+                }
+            }
+            let mat = encode_tail(&mat);
+            for x in 0..8 {
+                for y in 0..8 {
+                    dst.set_pixel_y(SIZE * i + x, SIZE * j + y, mat.get(x, y));
+                }
+            }
+        }
+    }
+    dst
+}
+
+pub fn decode_frame<T>(src: &T) -> T
+where
+    T: YUVFrame + Clone,
+{
+    let mut dst = src.clone();
+    for i in 0..1920 / SIZE {
+        for j in 0..1080 / SIZE {
+            let mut mat = Matrix::new(SIZE);
+            for x in 0..8 {
+                for y in 0..8 {
+                    mat.set(x, y, dst.get_pixel_y(SIZE * i + x, SIZE * j + y));
+                }
+            }
+            let mat = decode_tail(&mat);
+            for x in 0..8 {
+                for y in 0..8 {
+                    dst.set_pixel_y(SIZE * i + x, SIZE * j + y, mat.get(x, y));
+                }
+            }
+        }
+    }
+    dst
 }

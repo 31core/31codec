@@ -11,15 +11,15 @@ struct HuffmanNode {
 impl HuffmanNode {
     fn build(freq_list: &[usize]) -> Self {
         fn find_min(freq_list: &mut Vec<HuffmanNode>) -> HuffmanNode {
-            let mut min = 0;
+            let mut min_pos = 0;
             for i in 0..freq_list.len() {
-                if freq_list[i].value < freq_list[min].value {
-                    min = i;
+                if freq_list[i].value < freq_list[min_pos].value {
+                    min_pos = i;
                 }
             }
-            let min2 = freq_list[min].clone();
-            freq_list.remove(min);
-            min2
+            let min = freq_list[min_pos].clone();
+            freq_list.remove(min_pos);
+            min
         }
 
         let mut freq_node_list = Vec::new();
@@ -66,6 +66,7 @@ impl HuffmanNode {
 
         let mut bits = Vec::new();
         get_huffman_code(self, byte, &mut bits);
+        bits.reverse();
         bits
     }
 
@@ -120,7 +121,7 @@ fn load_from_bits(bits: &[u8]) -> (HuffmanNode, usize) {
 fn bits_to_byte(bits: &[u8]) -> u8 {
     let mut byte = 0;
     for (i, bit) in bits.iter().enumerate().take(8) {
-        byte |= *bit << (8 - i);
+        byte |= *bit << (7 - i);
     }
     byte
 }
@@ -128,7 +129,7 @@ fn bits_to_byte(bits: &[u8]) -> u8 {
 fn byte_to_bits(byte: u8) -> Vec<u8> {
     let mut bits = Vec::new();
     for i in 0..8 {
-        bits.push((byte >> (8 - i)) & 1);
+        bits.push((byte >> (7 - i)) & 1);
     }
     bits
 }
@@ -144,8 +145,7 @@ pub fn encode(bytes: &[u8]) -> Vec<u8> {
 
     let mut compressed_data_bits = Vec::new();
     for byte in bytes {
-        let mut bits = root.get_huffman_code(*byte);
-        bits.reverse();
+        let bits = root.get_huffman_code(*byte);
         compressed_data_bits.extend(bits);
     }
     let compressed_size = compressed_data_bits.len();
@@ -156,7 +156,7 @@ pub fn encode(bytes: &[u8]) -> Vec<u8> {
     }
     let mut i = 0;
     while i < compressed_data_bits.len() {
-        compressed_data.push(bits_to_byte(&compressed_data_bits));
+        compressed_data.push(bits_to_byte(&compressed_data_bits[i..]));
         i += 8;
     }
 
@@ -169,7 +169,7 @@ pub fn encode(bytes: &[u8]) -> Vec<u8> {
 }
 
 pub fn decode(bytes: &[u8]) -> Vec<u8> {
-    let size = u32::from_be_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
+    let size = u32::from_be_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]) as usize;
     let (huffman_table, table_size) = load_from_bits(&bytes[4..]);
     let compressed_data = &bytes[table_size + 4..];
 
@@ -180,7 +180,7 @@ pub fn decode(bytes: &[u8]) -> Vec<u8> {
     }
 
     let mut i = 0;
-    while i <= size as usize {
+    while i < size {
         let (byte, j) = huffman_table.get_byte(&compressed_data_bits[i..]);
         data.push(byte);
         i += j;

@@ -40,6 +40,7 @@ pub trait YUVFrame {
     fn set_pixel_v(&mut self, x: usize, y: usize, cr: u8);
 }
 
+#[derive(Clone)]
 pub struct YUV420Frame {
     width: usize,
     #[allow(dead_code)]
