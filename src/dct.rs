@@ -34,8 +34,8 @@ fn dct_point(u: f64, v: f64, tail: &Matrix<f64>) -> f64 {
     for i in 0..tail.len() {
         for j in 0..tail.len() {
             sum += tail.get(i, j)
-                * ((i as f64 + 0.5) * PI / n * u).cos()
-                * ((j as f64 + 0.5) * PI / n * v).cos();
+                * ((i as f64 + 0.5) * PI * u / n).cos()
+                * ((j as f64 + 0.5) * PI * v / n).cos();
         }
     }
     c(u) * c(v) * sum
@@ -84,7 +84,7 @@ fn quantize(tail: &mut Matrix<f64>) {
     }
 }
 
-fn iquantize(tail: &mut Matrix<f64>) {
+fn quantize_inv(tail: &mut Matrix<f64>) {
     let q_mat = q_mat();
     for i in 0..SIZE {
         for j in 0..SIZE {
@@ -125,7 +125,7 @@ fn encode_tail(tail: &Matrix<u8>) -> Matrix<u8> {
 
 fn decode_tail(tail: &Matrix<u8>) -> Matrix<u8> {
     let mut tail = i8_to_f64(&u8_to_i8(tail));
-    iquantize(&mut tail);
+    quantize_inv(&mut tail);
     idct(&mut tail);
     i8_to_u8(&f64_to_i8(&tail))
 }
@@ -135,17 +135,18 @@ where
     T: YUVFrame + Clone,
 {
     let mut dst = src.clone();
-    for i in 0..1920 / SIZE {
-        for j in 0..1080 / SIZE {
+    let (width, height) = src.get_resolution();
+    for i in 0..width / SIZE {
+        for j in 0..height / SIZE {
             let mut mat = Matrix::new(SIZE);
-            for x in 0..8 {
-                for y in 0..8 {
+            for x in 0..SIZE {
+                for y in 0..SIZE {
                     mat.set(x, y, dst.get_pixel_y(SIZE * i + x, SIZE * j + y));
                 }
             }
             let mat = encode_tail(&mat);
-            for x in 0..8 {
-                for y in 0..8 {
+            for x in 0..SIZE {
+                for y in 0..SIZE {
                     dst.set_pixel_y(SIZE * i + x, SIZE * j + y, mat.get(x, y));
                 }
             }
@@ -159,17 +160,18 @@ where
     T: YUVFrame + Clone,
 {
     let mut dst = src.clone();
-    for i in 0..1920 / SIZE {
-        for j in 0..1080 / SIZE {
+    let (width, height) = src.get_resolution();
+    for i in 0..width / SIZE {
+        for j in 0..height / SIZE {
             let mut mat = Matrix::new(SIZE);
-            for x in 0..8 {
-                for y in 0..8 {
+            for x in 0..SIZE {
+                for y in 0..SIZE {
                     mat.set(x, y, dst.get_pixel_y(SIZE * i + x, SIZE * j + y));
                 }
             }
             let mat = decode_tail(&mat);
-            for x in 0..8 {
-                for y in 0..8 {
+            for x in 0..SIZE {
+                for y in 0..SIZE {
                     dst.set_pixel_y(SIZE * i + x, SIZE * j + y, mat.get(x, y));
                 }
             }

@@ -20,6 +20,7 @@ impl Frame {
 #[derive(Default)]
 pub struct Video {
     pub frames: Vec<Frame>,
+    pub resolution: (usize, usize),
 }
 
 impl Video {

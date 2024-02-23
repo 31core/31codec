@@ -9,6 +9,15 @@ struct HuffmanNode {
 }
 
 impl HuffmanNode {
+    /* statistical the frequencies */
+    fn stat_freq(bytes: &[u8]) -> [usize; 256] {
+        let mut freq_list = [0; 256];
+        for byte in bytes {
+            freq_list[*byte as usize] += 1;
+        }
+
+        freq_list
+    }
     fn build(freq_list: &[usize]) -> Self {
         fn find_min(freq_list: &mut Vec<HuffmanNode>) -> HuffmanNode {
             let mut min_pos = 0;
@@ -69,7 +78,14 @@ impl HuffmanNode {
         bits.reverse();
         bits
     }
+    fn get_dict(&self) -> Vec<Vec<u8>> {
+        let mut dict = vec![Vec::new(); 255];
+        for (i, byte) in dict.iter_mut().enumerate() {
+            *byte = self.get_huffman_code(i as u8);
+        }
 
+        dict
+    }
     /** Get a byte code by Huffman code */
     fn get_byte(&self, bits: &[u8]) -> (u8, usize) {
         let mut i = 0;
@@ -84,37 +100,36 @@ impl HuffmanNode {
         }
         (root.byte, i)
     }
+    /** load Huffman tree from binary */
+    fn load_from_bits(bits: &[u8]) -> (Self, usize) {
+        let mut root = Self::default();
+        if *bits.first().unwrap() == 0 {
+            let (left, i) = Self::load_from_bits(&bits[1..]);
+            root.left = Some(Rc::new(left));
+            let (right, j) = Self::load_from_bits(&bits[i + 1..]);
+            root.right = Some(Rc::new(right));
+            (root, i + j + 1)
+        } else {
+            root.byte = bits[1];
+            (root, 2)
+        }
+    }
+
+    /** dump Huffman tree into binary */
+    fn dump_to_bits(&self) -> Vec<u8> {
+        let mut bits = Vec::new();
+        if self.is_leaf() {
+            bits.push(1);
+            bits.push(self.byte);
+        } else {
+            bits.push(0);
+            bits.extend(self.left.clone().unwrap().dump_to_bits());
+            bits.extend(self.right.clone().unwrap().dump_to_bits());
+        }
+        bits
+    }
     fn is_leaf(&self) -> bool {
         self.left.is_none() && self.right.is_none()
-    }
-}
-
-/** dump Huffman tree into binary */
-fn dump_to_bits(root: &HuffmanNode) -> Vec<u8> {
-    let mut bits = Vec::new();
-    if root.is_leaf() {
-        bits.push(1);
-        bits.push(root.byte);
-    } else {
-        bits.push(0);
-        bits.extend(dump_to_bits(&root.left.clone().unwrap()));
-        bits.extend(dump_to_bits(&root.right.clone().unwrap()));
-    }
-    bits
-}
-
-/** load Huffman tree from binary */
-fn load_from_bits(bits: &[u8]) -> (HuffmanNode, usize) {
-    let mut root = HuffmanNode::default();
-    if *bits.first().unwrap() == 0 {
-        let (left, i) = load_from_bits(&bits[1..]);
-        root.left = Some(Rc::new(left));
-        let (right, j) = load_from_bits(&bits[i + 1..]);
-        root.right = Some(Rc::new(right));
-        (root, i + j + 1)
-    } else {
-        root.byte = bits[1];
-        (root, 2)
     }
 }
 
@@ -135,21 +150,15 @@ fn byte_to_bits(byte: u8) -> Vec<u8> {
 }
 
 pub fn encode(bytes: &[u8]) -> Vec<u8> {
-    /* statistical the frequencies */
-    let mut freq_list = [0; 256];
-    for byte in bytes {
-        freq_list[*byte as usize] += 1;
-    }
-
-    let root = HuffmanNode::build(&freq_list);
+    let root = HuffmanNode::build(&HuffmanNode::stat_freq(bytes));
 
     let mut compressed_data_bits = Vec::new();
+    let dict = root.get_dict();
     for byte in bytes {
-        let bits = root.get_huffman_code(*byte);
-        compressed_data_bits.extend(bits);
+        compressed_data_bits.extend(&dict[*byte as usize]);
     }
-    let compressed_size = compressed_data_bits.len();
 
+    let compressed_size = compressed_data_bits.len();
     let mut compressed_data = Vec::new();
     if compressed_data_bits.len() < 8 {
         compressed_data_bits.extend(vec![0; 8 - compressed_data_bits.len()]);
@@ -161,7 +170,7 @@ pub fn encode(bytes: &[u8]) -> Vec<u8> {
     }
 
     let mut data = Vec::new();
-    let huffman_table = dump_to_bits(&root);
+    let huffman_table = root.dump_to_bits();
     data.extend((compressed_size as u32).to_be_bytes());
     data.extend(huffman_table);
     data.extend(compressed_data);
@@ -170,7 +179,7 @@ pub fn encode(bytes: &[u8]) -> Vec<u8> {
 
 pub fn decode(bytes: &[u8]) -> Vec<u8> {
     let size = u32::from_be_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]) as usize;
-    let (huffman_table, table_size) = load_from_bits(&bytes[4..]);
+    let (huffman_table, table_size) = HuffmanNode::load_from_bits(&bytes[4..]);
     let compressed_data = &bytes[table_size + 4..];
 
     let mut compressed_data_bits = Vec::new();

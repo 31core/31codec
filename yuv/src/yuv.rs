@@ -38,12 +38,12 @@ pub trait YUVFrame {
     fn set_pixel_y(&mut self, x: usize, y: usize, y_: u8);
     fn set_pixel_u(&mut self, x: usize, y: usize, cb: u8);
     fn set_pixel_v(&mut self, x: usize, y: usize, cr: u8);
+    fn get_resolution(&self) -> (usize, usize);
 }
 
 #[derive(Clone)]
 pub struct YUV420Frame {
     width: usize,
-    #[allow(dead_code)]
     height: usize,
     pub points: Vec<YUV420>,
 }
@@ -105,6 +105,9 @@ impl YUVFrame for YUV420Frame {
     }
     fn set_pixel_v(&mut self, i: usize, j: usize, cr: u8) {
         self.points[(j / 2) * (self.width / 2) + i / 2].cb = cr;
+    }
+    fn get_resolution(&self) -> (usize, usize) {
+        (self.width, self.height)
     }
 }
 
