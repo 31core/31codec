@@ -2,9 +2,9 @@ use crate::mat::Matrix;
 use std::f64::consts::PI;
 use yuv::YUVFrame;
 
-pub const SIZE: usize = 8;
+pub const TAIL_SIZE: usize = 8;
 
-pub fn q_mat() -> Matrix<f64> {
+fn q_mat() -> Matrix<f64> {
     Matrix::from(
         &[
             16., 11., 10., 16., 24., 40., 51., 61., // row 1
@@ -16,15 +16,15 @@ pub fn q_mat() -> Matrix<f64> {
             49., 64., 78., 87., 103., 121., 120., 101., // row 7
             72., 92., 95., 98., 112., 100., 103., 99., // row 8
         ],
-        SIZE,
+        TAIL_SIZE,
     )
 }
 
 fn c(i: f64) -> f64 {
     if i == 0. {
-        (1. / SIZE as f64).sqrt()
+        (1. / TAIL_SIZE as f64).sqrt()
     } else {
-        (2. / SIZE as f64).sqrt()
+        (2. / TAIL_SIZE as f64).sqrt()
     }
 }
 
@@ -58,8 +58,8 @@ fn idct_point(u: f64, v: f64, tail: &Matrix<f64>) -> f64 {
 
 fn dct(tail: &mut Matrix<f64>) {
     let src = tail.clone();
-    for u in 0..SIZE {
-        for v in 0..SIZE {
+    for u in 0..TAIL_SIZE {
+        for v in 0..TAIL_SIZE {
             tail.set(u, v, dct_point(u as f64, v as f64, &src));
         }
     }
@@ -68,7 +68,7 @@ fn dct(tail: &mut Matrix<f64>) {
 fn idct(tail: &mut Matrix<f64>) {
     let src = tail.clone();
     for u in 0..tail.len() {
-        for v in 0..SIZE {
+        for v in 0..TAIL_SIZE {
             tail.set(u, v, idct_point(u as f64, v as f64, &src));
         }
     }
@@ -86,8 +86,8 @@ fn quantize(tail: &mut Matrix<f64>) {
 
 fn quantize_inv(tail: &mut Matrix<f64>) {
     let q_mat = q_mat();
-    for i in 0..SIZE {
-        for j in 0..SIZE {
+    for i in 0..TAIL_SIZE {
+        for j in 0..TAIL_SIZE {
             let e = tail.get(i, j) * q_mat.get(i, j);
             tail.set(i, j, e);
         }
@@ -136,18 +136,18 @@ where
 {
     let mut dst = src.clone();
     let (width, height) = src.get_resolution();
-    for i in 0..width / SIZE {
-        for j in 0..height / SIZE {
-            let mut mat = Matrix::new(SIZE);
-            for x in 0..SIZE {
-                for y in 0..SIZE {
-                    mat.set(x, y, dst.get_pixel_y(SIZE * i + x, SIZE * j + y));
+    for i in 0..width / TAIL_SIZE {
+        for j in 0..height / TAIL_SIZE {
+            let mut mat = Matrix::new(TAIL_SIZE);
+            for x in 0..TAIL_SIZE {
+                for y in 0..TAIL_SIZE {
+                    mat.set(x, y, dst.get_pixel_y(TAIL_SIZE * i + x, TAIL_SIZE * j + y));
                 }
             }
             let mat = encode_tail(&mat);
-            for x in 0..SIZE {
-                for y in 0..SIZE {
-                    dst.set_pixel_y(SIZE * i + x, SIZE * j + y, mat.get(x, y));
+            for x in 0..TAIL_SIZE {
+                for y in 0..TAIL_SIZE {
+                    dst.set_pixel_y(TAIL_SIZE * i + x, TAIL_SIZE * j + y, mat.get(x, y));
                 }
             }
         }
@@ -161,18 +161,18 @@ where
 {
     let mut dst = src.clone();
     let (width, height) = src.get_resolution();
-    for i in 0..width / SIZE {
-        for j in 0..height / SIZE {
-            let mut mat = Matrix::new(SIZE);
-            for x in 0..SIZE {
-                for y in 0..SIZE {
-                    mat.set(x, y, dst.get_pixel_y(SIZE * i + x, SIZE * j + y));
+    for i in 0..width / TAIL_SIZE {
+        for j in 0..height / TAIL_SIZE {
+            let mut mat = Matrix::new(TAIL_SIZE);
+            for x in 0..TAIL_SIZE {
+                for y in 0..TAIL_SIZE {
+                    mat.set(x, y, dst.get_pixel_y(TAIL_SIZE * i + x, TAIL_SIZE * j + y));
                 }
             }
             let mat = decode_tail(&mat);
-            for x in 0..SIZE {
-                for y in 0..SIZE {
-                    dst.set_pixel_y(SIZE * i + x, SIZE * j + y, mat.get(x, y));
+            for x in 0..TAIL_SIZE {
+                for y in 0..TAIL_SIZE {
+                    dst.set_pixel_y(TAIL_SIZE * i + x, TAIL_SIZE * j + y, mat.get(x, y));
                 }
             }
         }

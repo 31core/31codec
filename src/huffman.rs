@@ -1,3 +1,4 @@
+use crate::bitstream::BitStream;
 use std::rc::Rc;
 
 #[derive(Clone, Default, Debug)]
@@ -87,112 +88,84 @@ impl HuffmanNode {
         dict
     }
     /** Get a byte code by Huffman code */
-    fn get_byte(&self, bits: &[u8]) -> (u8, usize) {
-        let mut i = 0;
+    fn get_byte(&self, bits: &mut BitStream) -> u8 {
         let mut root = Rc::new(self.clone());
         while !root.is_leaf() {
-            if bits[i] == 0 {
+            if bits.read() == 0 {
                 root = root.left.clone().unwrap();
             } else {
                 root = root.right.clone().unwrap();
             }
-            i += 1;
         }
-        (root.byte, i)
+        root.byte
     }
     /** load Huffman tree from binary */
-    fn load_from_bits(bits: &[u8]) -> (Self, usize) {
+    fn load_from_bits(bits: &mut BitStream, words: &mut Vec<u8>) -> Self {
         let mut root = Self::default();
-        if *bits.first().unwrap() == 0 {
-            let (left, i) = Self::load_from_bits(&bits[1..]);
+        if bits.read() == 0 {
+            let left = Self::load_from_bits(bits, words);
             root.left = Some(Rc::new(left));
-            let (right, j) = Self::load_from_bits(&bits[i + 1..]);
+            let right = Self::load_from_bits(bits, words);
             root.right = Some(Rc::new(right));
-            (root, i + j + 1)
+            root
         } else {
-            root.byte = bits[1];
-            (root, 2)
+            root.byte = *words.first().unwrap();
+            words.remove(0);
+            root
         }
     }
 
     /** dump Huffman tree into binary */
-    fn dump_to_bits(&self) -> Vec<u8> {
-        let mut bits = Vec::new();
+    fn dump_to_bits(&self, bits: &mut BitStream, words: &mut Vec<u8>) {
         if self.is_leaf() {
-            bits.push(1);
-            bits.push(self.byte);
+            bits.write(1);
+            words.push(self.byte);
         } else {
-            bits.push(0);
-            bits.extend(self.left.clone().unwrap().dump_to_bits());
-            bits.extend(self.right.clone().unwrap().dump_to_bits());
+            bits.write(0);
+            self.left.clone().unwrap().dump_to_bits(bits, words);
+            self.right.clone().unwrap().dump_to_bits(bits, words);
         }
-        bits
     }
     fn is_leaf(&self) -> bool {
         self.left.is_none() && self.right.is_none()
     }
 }
 
-fn bits_to_byte(bits: &[u8]) -> u8 {
-    let mut byte = 0;
-    for (i, bit) in bits.iter().enumerate().take(8) {
-        byte |= *bit << (7 - i);
-    }
-    byte
-}
-
-fn byte_to_bits(byte: u8) -> Vec<u8> {
-    let mut bits = Vec::new();
-    for i in 0..8 {
-        bits.push((byte >> (7 - i)) & 1);
-    }
-    bits
-}
-
 pub fn encode(bytes: &[u8]) -> Vec<u8> {
     let root = HuffmanNode::build(&HuffmanNode::stat_freq(bytes));
 
-    let mut compressed_data_bits = Vec::new();
+    let mut compressed_data_bits = BitStream::default();
     let dict = root.get_dict();
     for byte in bytes {
-        compressed_data_bits.extend(&dict[*byte as usize]);
-    }
-
-    let compressed_size = compressed_data_bits.len();
-    let mut compressed_data = Vec::new();
-    if compressed_data_bits.len() < 8 {
-        compressed_data_bits.extend(vec![0; 8 - compressed_data_bits.len()]);
-    }
-    let mut i = 0;
-    while i < compressed_data_bits.len() {
-        compressed_data.push(bits_to_byte(&compressed_data_bits[i..]));
-        i += 8;
+        for bit in &dict[*byte as usize] {
+            compressed_data_bits.write(*bit);
+        }
     }
 
     let mut data = Vec::new();
-    let huffman_table = root.dump_to_bits();
-    data.extend((compressed_size as u32).to_be_bytes());
-    data.extend(huffman_table);
-    data.extend(compressed_data);
+    let mut huffman_table = BitStream::default();
+    let mut words = Vec::new();
+    root.dump_to_bits(&mut huffman_table, &mut words);
+
+    data.extend((compressed_data_bits.total_bits() as u32).to_be_bytes());
+    data.extend(words);
+    data.extend(huffman_table.data);
+    data.extend(compressed_data_bits.data);
     data
 }
 
 pub fn decode(bytes: &[u8]) -> Vec<u8> {
-    let size = u32::from_be_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]) as usize;
-    let (huffman_table, table_size) = HuffmanNode::load_from_bits(&bytes[4..]);
-    let compressed_data = &bytes[table_size + 4..];
+    let size = u32::from_be_bytes(bytes[0..4].try_into().unwrap()) as usize;
+    let mut bitts = BitStream::from_bytes(&bytes[4 + 256..]);
+    let mut words = bytes[4..4 + 256].to_vec();
+    let huffman_table = HuffmanNode::load_from_bits(&mut bitts, &mut words);
+    let compressed_data = &bytes[4 + 256 + bitts.total_bytes()..];
 
-    let mut compressed_data_bits = Vec::new();
+    let mut compressed_data_bits = BitStream::from_bytes(compressed_data);
     let mut data = Vec::new();
-    for byte in compressed_data {
-        compressed_data_bits.extend(byte_to_bits(*byte));
-    }
-
-    let mut i = 0;
-    while i < size {
-        let (byte, j) = huffman_table.get_byte(&compressed_data_bits[i..]);
+    while compressed_data_bits.total_bits() < size {
+        let byte = huffman_table.get_byte(&mut compressed_data_bits);
         data.push(byte);
-        i += j;
     }
 
     data
